@@ -5,7 +5,9 @@ import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Step = "email" | "otp";
+type Mode = "login" | "signup";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginPage() {
   const t = useTranslations("login");
@@ -13,140 +15,124 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/devices";
 
-  const [step, setStep] = useState<Step>("email");
+  const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleEmailSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: true },
-    });
-
-    setLoading(false);
-    if (authError) {
-      setError(authError.message);
-    } else {
-      setStep("otp");
-    }
+  function validate(): string | null {
+    if (!EMAIL_RE.test(email)) return t("errorEmail");
+    if (password.length < 8) return t("errorPasswordLength");
+    return null;
   }
 
-  async function handleOtpSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: "email",
-    });
-
-    setLoading(false);
-    if (authError) {
-      setError(t("otpError"));
-    } else {
-      const safePath = next.startsWith("/") ? next : "/devices";
-      router.push(safePath);
-      router.refresh();
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
     }
+
+    setLoading(true);
+    const supabase = createClient();
+
+    if (mode === "signup") {
+      const { error: authError } = await supabase.auth.signUp({ email, password });
+      setLoading(false);
+      if (authError) {
+        if (authError.message.toLowerCase().includes("already registered")) {
+          setError(t("errorAlreadyExists"));
+        } else {
+          setError(authError.message);
+        }
+        return;
+      }
+    } else {
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      setLoading(false);
+      if (authError) {
+        setError(t("errorInvalidCredentials"));
+        return;
+      }
+    }
+
+    const safePath = next.startsWith("/") ? next : "/devices";
+    router.push(safePath);
+    router.refresh();
   }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow-sm">
-        <h1 className="mb-6 text-2xl font-bold">{t("title")}</h1>
+        <h1 className="mb-6 text-2xl font-bold">
+          {mode === "login" ? t("titleLogin") : t("titleSignup")}
+        </h1>
 
-        {step === "email" ? (
-          <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4">
-            <div>
-              <label htmlFor="email" className="mb-1 block text-sm font-medium">
-                {t("emailLabel")}
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={t("emailPlaceholder")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <label htmlFor="email" className="mb-1 block text-sm font-medium">
+              {t("emailLabel")}
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t("emailPlaceholder")}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="mb-1 block text-sm font-medium">
+              {t("passwordLabel")}
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("passwordPlaceholder")}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
             </div>
+          )}
 
-            {error && (
-              <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
-            )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            {loading ? t("loading") : mode === "login" ? t("submitLogin") : t("submitSignup")}
+          </button>
+        </form>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-            >
-              {loading ? t("sending") : t("submit")}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleOtpSubmit} className="flex flex-col gap-4">
-            <p className="text-sm text-muted-foreground">{t("checkEmail", { email })}</p>
-
-            <div>
-              <label htmlFor="otp" className="mb-1 block text-sm font-medium">
-                {t("otpLabel")}
-              </label>
-              <input
-                id="otp"
-                type="text"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                required
-                autoComplete="one-time-code"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="000000"
-                className="w-full rounded-lg border border-border bg-background px-4 py-3 text-center font-mono text-2xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-
-            {error && (
-              <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || otp.length !== 6}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-            >
-              {loading ? t("verifying") : t("verify")}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setStep("email");
-                setOtp("");
-                setError(null);
-              }}
-              className="text-center text-sm text-muted-foreground underline-offset-2 hover:underline"
-            >
-              {t("changeEmail")}
-            </button>
-          </form>
-        )}
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          {mode === "login" ? t("noAccount") : t("haveAccount")}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === "login" ? "signup" : "login");
+              setError(null);
+            }}
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            {mode === "login" ? t("switchToSignup") : t("switchToLogin")}
+          </button>
+        </p>
       </div>
     </main>
   );

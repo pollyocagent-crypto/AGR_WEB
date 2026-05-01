@@ -16,22 +16,36 @@
     "ctaCreate": "Crear cuenta"
   },
   "login": {
-    "title": "Iniciar sesión",
+    "titleLogin": "Iniciar sesión",
+    "titleSignup": "Crear cuenta",
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "tu@ejemplo.com",
-    "submit": "Enviar código",
-    "sending": "Enviando…",
-    "checkEmail": "Enviamos un código de 6 dígitos a {email}. Ingrésalo a continuación.",
-    "otpLabel": "Código de 6 dígitos",
-    "verify": "Iniciar sesión",
-    "verifying": "Verificando…",
-    "otpError": "Código inválido o expirado. Inténtalo de nuevo.",
-    "changeEmail": "Usar otro correo electrónico"
+    "passwordLabel": "Contraseña",
+    "passwordPlaceholder": "Al menos 8 caracteres",
+    "submitLogin": "Iniciar sesión",
+    "submitSignup": "Crear cuenta",
+    "loading": "Por favor espera…",
+    "noAccount": "¿No tienes cuenta?",
+    "haveAccount": "¿Ya tienes cuenta?",
+    "switchToSignup": "Crear una",
+    "switchToLogin": "Iniciar sesión",
+    "errorEmail": "Ingresa un correo electrónico válido.",
+    "errorPasswordLength": "La contraseña debe tener al menos 8 caracteres.",
+    "errorInvalidCredentials": "Correo o contraseña incorrectos.",
+    "errorAlreadyExists": "La cuenta ya existe. Intenta iniciar sesión."
   },
   "profile": {
     "title": "Perfil",
     "email": "Correo electrónico",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "changePassword": "Cambiar contraseña",
+    "newPassword": "Nueva contraseña",
+    "confirmPassword": "Confirmar nueva contraseña",
+    "savePassword": "Guardar",
+    "saving": "Guardando…",
+    "passwordMismatch": "Las contraseñas no coinciden.",
+    "passwordShort": "La contraseña debe tener al menos 8 caracteres.",
+    "passwordChanged": "Contraseña actualizada con éxito."
   },
   "devices": {
     "title": "Mis dispositivos",

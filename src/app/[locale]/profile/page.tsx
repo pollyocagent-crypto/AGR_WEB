@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { LogoutButton } from "./logout-button";
+import { ChangePasswordButton } from "./change-password-button";
 import type { Metadata } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -31,7 +32,10 @@ export default async function ProfilePage() {
           <p className="mt-1 text-base">{user.email}</p>
         </div>
 
-        <LogoutButton label={t("logout")} />
+        <div className="flex flex-wrap gap-2">
+          <ChangePasswordButton />
+          <LogoutButton label={t("logout")} />
+        </div>
       </div>
     </main>
   );
