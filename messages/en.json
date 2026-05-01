@@ -40,5 +40,22 @@
     "state": "Live State",
     "commands": "Commands",
     "events": "Events"
+  },
+  "addDevice": {
+    "title": "Add Device",
+    "subtitle": "Enter the 6-digit code shown on your HMI screen, or scan the QR code.",
+    "codeLabel": "Pairing code",
+    "codePlaceholder": "123456",
+    "submit": "Pair Device",
+    "pairing": "Pairing…",
+    "scanTab": "Scan QR",
+    "typeTab": "Enter Code",
+    "scanHint": "Point your camera at the QR code on the HMI screen.",
+    "errorInvalid": "Invalid code. Check the code on your HMI screen.",
+    "errorExpired": "The pairing code has expired. Please generate a new one on the HMI.",
+    "errorAlreadyPaired": "This device is already paired to your account.",
+    "errorCamera": "Camera access denied. Grant permission or enter the code manually.",
+    "errorGeneric": "Something went wrong. Please try again.",
+    "addDeviceButton": "Add Device"
   }
 }

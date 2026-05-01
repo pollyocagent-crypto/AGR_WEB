@@ -40,5 +40,22 @@
     "state": "Estado en vivo",
     "commands": "Comandos",
     "events": "Eventos"
+  },
+  "addDevice": {
+    "title": "Añadir dispositivo",
+    "subtitle": "Ingresa el código de 6 dígitos que aparece en tu pantalla HMI, o escanea el código QR.",
+    "codeLabel": "Código de emparejamiento",
+    "codePlaceholder": "123456",
+    "submit": "Vincular dispositivo",
+    "pairing": "Vinculando…",
+    "scanTab": "Escanear QR",
+    "typeTab": "Ingresar código",
+    "scanHint": "Apunta la cámara al código QR en la pantalla HMI.",
+    "errorInvalid": "Código inválido. Verifica el código en tu pantalla HMI.",
+    "errorExpired": "El código de emparejamiento ha expirado. Genera uno nuevo en el HMI.",
+    "errorAlreadyPaired": "Este dispositivo ya está vinculado a tu cuenta.",
+    "errorCamera": "Acceso a la cámara denegado. Concede el permiso o ingresa el código manualmente.",
+    "errorGeneric": "Algo salió mal. Por favor, inténtalo de nuevo.",
+    "addDeviceButton": "Añadir dispositivo"
   }
 }
