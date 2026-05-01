@@ -18,7 +18,7 @@ import { SignJWT } from "jose";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const JWT_SECRET = Deno.env.get("SUPABASE_JWT_SECRET")!;
+const JWT_SECRET = Deno.env.get("AGR_JWT_SECRET")!;
 
 const DEVICE_JWT_EXPIRY = "365d";
 const PAIRING_CODE_TTL_HOURS = 1;
