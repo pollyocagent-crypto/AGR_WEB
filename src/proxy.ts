@@ -16,7 +16,22 @@ function isProtected(pathname: string): boolean {
   );
 }
 
+// Routes that must not be processed by next-intl: locale-agnostic handlers
+// that live outside app/[locale]/ in the App Router tree. If intlMiddleware
+// runs on these, it rewrites them into the [locale] subtree where they don't
+// exist and Next.js returns 404.
+const INTL_SKIP_PREFIXES = ["/auth/", "/pair"];
+
 export default async function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+
+  // Skip next-intl for locale-agnostic routes; those route handlers manage
+  // their own auth (e.g. /auth/callback runs exchangeCodeForSession itself).
+  const skipIntl = INTL_SKIP_PREFIXES.some((p) => pathname.startsWith(p));
+  if (skipIntl) {
+    return NextResponse.next();
+  }
+
   // Run next-intl first to handle locale redirects and set locale headers
   const response = intlMiddleware(request);
 
@@ -44,7 +59,6 @@ export default async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname, search } = request.nextUrl;
   if (!user && isProtected(pathname)) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", search ? `${pathname}${search}` : pathname);
@@ -55,6 +69,10 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Run on all routes except Next.js internals and static files
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Exclude Next.js internals, static files, AND locale-agnostic auth routes
+  // from the middleware. The auth/callback route handler runs exchangeCodeForSession
+  // itself and must not be intercepted by intlMiddleware.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|auth/|pair|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };
