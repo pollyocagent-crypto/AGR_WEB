@@ -62,8 +62,14 @@ file_size_limit = "50MiB"
 
 [auth]
 enabled = true
-site_url = "http://127.0.0.1:3000"
-additional_redirect_urls = ["https://localhost:3000"]
+site_url = "https://agr-hmi-cloud.vercel.app"
+additional_redirect_urls = [
+  "https://agr-hmi-cloud.vercel.app/**",
+  "https://agr-hmi-cloud.vercel.app/auth/callback",
+  "https://*-pollyocagent-crypto.vercel.app/**",
+  "http://localhost:3000/**",
+  "http://localhost:3000/auth/callback",
+]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10

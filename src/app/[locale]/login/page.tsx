@@ -22,10 +22,10 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = createClient();
-    const redirectTo =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
-        : `/auth/callback?next=${encodeURIComponent(next)}`;
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
+    const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`;
 
     const { error: authError } = await supabase.auth.signInWithOtp({
       email,
