@@ -1,5 +1,11 @@
+import { createClient } from "@/lib/supabase/server";
+import { redirect as nextRedirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { DeviceDetailClient } from "@/components/devices/device-detail-client";
 import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ locale: string; id: string }>;
@@ -7,29 +13,50 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  return { title: `Device ${id}` };
+  const t = await getTranslations("deviceDetail");
+  return { title: `${t("title")} — ${id.slice(0, 8)}` };
 }
 
 export default async function DeviceDetailPage({ params }: Props) {
   const { id } = await params;
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) nextRedirect("/login");
+
   const t = await getTranslations("deviceDetail");
+
+  // Verify ownership (RLS enforces this, but we want 404 over empty UI).
+  const { data: ownership } = await supabase
+    .from("device_owners")
+    .select("role")
+    .eq("device_id", id)
+    .maybeSingle();
+
+  if (!ownership) notFound();
+
+  const [{ data: device }, { data: stateRow }] = await Promise.all([
+    supabase
+      .from("devices")
+      .select("id, device_uid, firmware_version, last_seen_at")
+      .eq("id", id)
+      .single(),
+    supabase.from("device_state").select("state, updated_at").eq("device_id", id).maybeSingle(),
+  ]);
+
+  if (!device) notFound();
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="mb-2 text-3xl font-bold">{t("title")}</h1>
-      <p className="mb-6 font-mono text-sm text-muted-foreground">{id}</p>
+      <h1 className="mb-1 text-3xl font-bold">{t("title")}</h1>
+      <p className="mb-1 font-mono text-sm text-muted-foreground">{device.device_uid}</p>
+      {device.firmware_version && (
+        <p className="mb-6 text-xs text-muted-foreground">fw {device.firmware_version}</p>
+      )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {(["state", "commands", "events"] as const).map((section) => (
-          <div
-            key={section}
-            className="rounded-xl border border-border bg-card p-6 text-center text-muted-foreground"
-          >
-            <p className="font-semibold">{t(section)}</p>
-            <p className="mt-1 text-xs">Coming in AGR-123</p>
-          </div>
-        ))}
-      </div>
+      <DeviceDetailClient device={device} initialState={stateRow ?? null} />
     </main>
   );
 }

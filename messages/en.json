@@ -33,13 +33,25 @@
     "title": "My Devices",
     "empty": "No devices paired yet.",
     "lastSeen": "Last seen",
-    "firmware": "Firmware"
+    "firmware": "Firmware",
+    "online": "Online",
+    "offline": "Offline",
+    "noState": "No data",
+    "activeChannels": "{count, plural, =0 {No active channels} one {# active channel} other {# active channels}}"
   },
   "deviceDetail": {
     "title": "Device",
-    "state": "Live State",
-    "commands": "Commands",
-    "events": "Events"
+    "channels": "Channels",
+    "channel": "Channel {n}",
+    "programs": "Irrigation Programs",
+    "program": "Program {n}",
+    "rescan": "Rescan",
+    "rescanning": "Rescanning…",
+    "rescanHint": "Re-discover all connected modules",
+    "offlineBanner": "Device is offline — controls are disabled",
+    "noChannels": "No channel data received yet",
+    "noPrograms": "No programs configured",
+    "commandError": "Failed to send command"
   },
   "addDevice": {
     "title": "Add Device",

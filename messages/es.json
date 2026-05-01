@@ -33,13 +33,25 @@
     "title": "Mis dispositivos",
     "empty": "Aún no hay dispositivos vinculados.",
     "lastSeen": "Última vez visto",
-    "firmware": "Firmware"
+    "firmware": "Firmware",
+    "online": "En línea",
+    "offline": "Sin conexión",
+    "noState": "Sin datos",
+    "activeChannels": "{count, plural, =0 {Sin canales activos} one {# canal activo} other {# canales activos}}"
   },
   "deviceDetail": {
     "title": "Dispositivo",
-    "state": "Estado en vivo",
-    "commands": "Comandos",
-    "events": "Eventos"
+    "channels": "Canales",
+    "channel": "Canal {n}",
+    "programs": "Programas de riego",
+    "program": "Programa {n}",
+    "rescan": "Reescanear",
+    "rescanning": "Reescaneando…",
+    "rescanHint": "Redescubrir todos los módulos conectados",
+    "offlineBanner": "El dispositivo está sin conexión — los controles están desactivados",
+    "noChannels": "Aún no se han recibido datos de canales",
+    "noPrograms": "Sin programas configurados",
+    "commandError": "Error al enviar el comando"
   },
   "addDevice": {
     "title": "Añadir dispositivo",

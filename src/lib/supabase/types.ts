@@ -1,5 +1,8 @@
 // Auto-generate after project is linked: npx supabase gen types typescript --local
 // Manually maintained until then.
+// supabase-js v2 GenericSchema requires: Tables (with Relationships), Views, Functions, Enums, CompositeTypes.
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type CommandStatus = "pending" | "sent" | "acked" | "failed";
 export type DeviceRole = "owner" | "member";
@@ -17,6 +20,7 @@ export interface Database {
         };
         Insert: Omit<Database["public"]["Tables"]["devices"]["Row"], "id" | "created_at">;
         Update: Partial<Database["public"]["Tables"]["devices"]["Insert"]>;
+        Relationships: [];
       };
       device_owners: {
         Row: {
@@ -27,21 +31,23 @@ export interface Database {
         };
         Insert: Omit<Database["public"]["Tables"]["device_owners"]["Row"], "created_at">;
         Update: Partial<Pick<Database["public"]["Tables"]["device_owners"]["Row"], "role">>;
+        Relationships: [];
       };
       device_state: {
         Row: {
           device_id: string;
-          state: Record<string, unknown>;
+          state: Json;
           updated_at: string;
         };
         Insert: Database["public"]["Tables"]["device_state"]["Row"];
         Update: Partial<Database["public"]["Tables"]["device_state"]["Insert"]>;
+        Relationships: [];
       };
       device_commands: {
         Row: {
           id: string;
           device_id: string;
-          payload: Record<string, unknown>;
+          payload: Json;
           requested_by: string;
           status: CommandStatus;
           created_at: string;
@@ -49,6 +55,7 @@ export interface Database {
         };
         Insert: Omit<Database["public"]["Tables"]["device_commands"]["Row"], "id" | "created_at">;
         Update: Partial<Database["public"]["Tables"]["device_commands"]["Insert"]>;
+        Relationships: [];
       };
       pairing_codes: {
         Row: {
@@ -58,6 +65,7 @@ export interface Database {
         };
         Insert: Database["public"]["Tables"]["pairing_codes"]["Row"];
         Update: never;
+        Relationships: [];
       };
       firmware_releases: {
         Row: {
@@ -69,6 +77,7 @@ export interface Database {
         };
         Insert: Database["public"]["Tables"]["firmware_releases"]["Row"];
         Update: Partial<Database["public"]["Tables"]["firmware_releases"]["Insert"]>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
@@ -82,7 +91,7 @@ export interface Database {
         Returns: string;
       };
       request_command: {
-        Args: { p_device_id: string; p_payload: Record<string, unknown> };
+        Args: { p_device_id: string; p_payload: Json };
         Returns: string;
       };
     };
@@ -90,6 +99,7 @@ export interface Database {
       command_status: CommandStatus;
       device_role: DeviceRole;
     };
+    CompositeTypes: Record<string, never>;
   };
 }
 
