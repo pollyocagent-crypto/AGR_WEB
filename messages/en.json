@@ -19,10 +19,14 @@
     "title": "Sign In",
     "emailLabel": "Email address",
     "emailPlaceholder": "you@example.com",
-    "submit": "Send magic link",
+    "submit": "Send code",
     "sending": "Sending…",
-    "checkEmail": "Check your email for the sign-in link.",
-    "callbackError": "The sign-in link was invalid or has expired. Please try again."
+    "checkEmail": "We sent a 6-digit code to {email}. Enter it below.",
+    "otpLabel": "6-digit code",
+    "verify": "Sign In",
+    "verifying": "Verifying…",
+    "otpError": "Invalid or expired code. Please try again.",
+    "changeEmail": "Use a different email"
   },
   "profile": {
     "title": "Profile",

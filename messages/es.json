@@ -19,10 +19,14 @@
     "title": "Iniciar sesión",
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "tu@ejemplo.com",
-    "submit": "Enviar enlace mágico",
+    "submit": "Enviar código",
     "sending": "Enviando…",
-    "checkEmail": "Revisa tu correo para el enlace de inicio de sesión.",
-    "callbackError": "El enlace de inicio de sesión no es válido o ha caducado. Inténtalo de nuevo."
+    "checkEmail": "Enviamos un código de 6 dígitos a {email}. Ingrésalo a continuación.",
+    "otpLabel": "Código de 6 dígitos",
+    "verify": "Iniciar sesión",
+    "verifying": "Verificando…",
+    "otpError": "Código inválido o expirado. Inténtalo de nuevo.",
+    "changeEmail": "Usar otro correo electrónico"
   },
   "profile": {
     "title": "Perfil",
