@@ -74,9 +74,26 @@ export interface Database {
           sha256: string;
           notes: string | null;
           published_at: string;
+          is_active: boolean;
         };
-        Insert: Database["public"]["Tables"]["firmware_releases"]["Row"];
+        Insert: Omit<
+          Database["public"]["Tables"]["firmware_releases"]["Row"],
+          "published_at" | "is_active"
+        > & {
+          published_at?: string;
+          is_active?: boolean;
+        };
         Update: Partial<Database["public"]["Tables"]["firmware_releases"]["Insert"]>;
+        Relationships: [];
+      };
+      admin_users: {
+        Row: {
+          user_id: string;
+          email: string;
+          created_at: string;
+        };
+        Insert: Database["public"]["Tables"]["admin_users"]["Row"];
+        Update: never;
         Relationships: [];
       };
     };

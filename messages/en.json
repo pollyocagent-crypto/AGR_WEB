@@ -51,7 +51,13 @@
     "offlineBanner": "Device is offline — controls are disabled",
     "noChannels": "No channel data received yet",
     "noPrograms": "No programs configured",
-    "commandError": "Failed to send command"
+    "commandError": "Failed to send command",
+    "otaTitle": "Firmware Update",
+    "otaHint": "Push the active firmware release to this device over-the-air.",
+    "otaButton": "Update Firmware",
+    "otaSending": "Sending…",
+    "otaSent": "OTA command sent — device will update to v{version}.",
+    "otaError": "Failed to send OTA command"
   },
   "addDevice": {
     "title": "Add Device",

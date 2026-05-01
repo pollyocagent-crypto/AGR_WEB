@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { RotateCw, WifiOff } from "lucide-react";
+import { Download, Loader2, RotateCw, WifiOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Device, DeviceState, Json } from "@/lib/supabase/types";
 
@@ -75,6 +75,8 @@ export function DeviceDetailClient({ device, initialState }: Props) {
   const [lastSeenAt, setLastSeenAt] = useState(device.last_seen_at);
   const [pendingChannels, setPendingChannels] = useState<Set<number>>(new Set());
   const [rescanPending, setRescanPending] = useState(false);
+  const [otaPending, setOtaPending] = useState(false);
+  const [otaMessage, setOtaMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const online = isOnline(lastSeenAt);
@@ -168,6 +170,22 @@ export function DeviceDetailClient({ device, initialState }: Props) {
     setTimeout(() => setRescanPending(false), 3000);
   }, [online, rescanPending, sendCommand]);
 
+  const handleOta = useCallback(async () => {
+    if (!online || otaPending) return;
+    setOtaPending(true);
+    setOtaMessage(null);
+    try {
+      const res = await fetch(`/api/devices/${device.id}/ota`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "OTA failed");
+      setOtaMessage({ kind: "ok", text: t("otaSent", { version: json.version }) });
+    } catch (err) {
+      setOtaMessage({ kind: "err", text: err instanceof Error ? err.message : t("otaError") });
+    } finally {
+      setOtaPending(false);
+    }
+  }, [online, otaPending, device.id, t]);
+
   return (
     <div className="space-y-6">
       {!online && (
@@ -252,6 +270,39 @@ export function DeviceDetailClient({ device, initialState }: Props) {
           </div>
         </div>
       )}
+
+      {/* OTA */}
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">{t("otaTitle")}</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">{t("otaHint")}</p>
+          </div>
+          <button
+            onClick={handleOta}
+            disabled={!online || otaPending}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {otaPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {otaPending ? t("otaSending") : t("otaButton")}
+          </button>
+        </div>
+        {otaMessage && (
+          <p
+            className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+              otaMessage.kind === "ok"
+                ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800/40 dark:bg-green-900/20 dark:text-green-400"
+                : "border-red-200 bg-red-50 text-red-700 dark:border-red-800/40 dark:bg-red-900/20 dark:text-red-400"
+            }`}
+          >
+            {otaMessage.text}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

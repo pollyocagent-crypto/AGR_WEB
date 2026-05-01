@@ -51,7 +51,13 @@
     "offlineBanner": "El dispositivo está sin conexión — los controles están desactivados",
     "noChannels": "Aún no se han recibido datos de canales",
     "noPrograms": "Sin programas configurados",
-    "commandError": "Error al enviar el comando"
+    "commandError": "Error al enviar el comando",
+    "otaTitle": "Actualización de firmware",
+    "otaHint": "Envía la versión activa del firmware a este dispositivo por aire.",
+    "otaButton": "Actualizar firmware",
+    "otaSending": "Enviando…",
+    "otaSent": "Comando OTA enviado — el dispositivo se actualizará a v{version}.",
+    "otaError": "Error al enviar el comando OTA"
   },
   "addDevice": {
     "title": "Añadir dispositivo",
