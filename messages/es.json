@@ -20,7 +20,14 @@
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "tu@ejemplo.com",
     "submit": "Enviar enlace mágico",
-    "checkEmail": "Revisa tu correo para el enlace de inicio de sesión."
+    "sending": "Enviando…",
+    "checkEmail": "Revisa tu correo para el enlace de inicio de sesión.",
+    "callbackError": "El enlace de inicio de sesión no es válido o ha caducado. Inténtalo de nuevo."
+  },
+  "profile": {
+    "title": "Perfil",
+    "email": "Correo electrónico",
+    "logout": "Cerrar sesión"
   },
   "devices": {
     "title": "Mis dispositivos",
