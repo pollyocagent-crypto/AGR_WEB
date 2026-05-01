@@ -1,0 +1,37 @@
+{
+  "common": {
+    "appName": "AGR HMI Cloud",
+    "loading": "Cargando…",
+    "error": "Algo salió mal"
+  },
+  "nav": {
+    "devices": "Dispositivos",
+    "login": "Iniciar sesión",
+    "logout": "Cerrar sesión"
+  },
+  "landing": {
+    "headline": "Acceso remoto para tu controlador de riego AGR",
+    "subheadline": "Monitorea sensores, ajusta programas y recibe alertas — desde cualquier lugar.",
+    "cta": "Iniciar sesión",
+    "ctaCreate": "Crear cuenta"
+  },
+  "login": {
+    "title": "Iniciar sesión",
+    "emailLabel": "Correo electrónico",
+    "emailPlaceholder": "tu@ejemplo.com",
+    "submit": "Enviar enlace mágico",
+    "checkEmail": "Revisa tu correo para el enlace de inicio de sesión."
+  },
+  "devices": {
+    "title": "Mis dispositivos",
+    "empty": "Aún no hay dispositivos vinculados.",
+    "lastSeen": "Última vez visto",
+    "firmware": "Firmware"
+  },
+  "deviceDetail": {
+    "title": "Dispositivo",
+    "state": "Estado en vivo",
+    "commands": "Comandos",
+    "events": "Eventos"
+  }
+}
