@@ -1,6 +1,8 @@
 # For detailed configuration reference documentation, visit:
 # https://supabase.com/docs/guides/local-development/cli/config
 project_id = "agr-web"
+# Remote project ref (AGR-117 cloud, eu-west-2)
+# project_ref = "lbhlqrjmhrgyrjsczjyf"
 
 [api]
 enabled = true
