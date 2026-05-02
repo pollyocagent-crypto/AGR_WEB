@@ -67,15 +67,21 @@ async function handleState(
 async function handleAck(
   supabase: SupabaseClient,
   deviceId: string,
-  msg: { command_id: string; ok: boolean }
+  msg: { command_id: string; ok: boolean; result?: unknown }
 ): Promise<void> {
   const newStatus = msg.ok ? "acked" : "failed";
+  const update: Record<string, unknown> = {
+    status: newStatus,
+    acked_at: new Date().toISOString(),
+  };
+  // For http-type commands the device echoes back {status, content_type, body_b64}.
+  // Store it so the Vercel proxy route can retrieve it via polling.
+  if (msg.result !== undefined) {
+    update.result = msg.result;
+  }
   const { error } = await supabase
     .from("device_commands")
-    .update({
-      status: newStatus,
-      acked_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq("id", msg.command_id)
     .eq("device_id", deviceId);
   if (error) console.error(`[device-relay] ack update error ${deviceId}:`, error);
@@ -273,11 +279,7 @@ Deno.serve(async (req: Request) => {
         await handleAck(
           supabase,
           deviceId,
-          msg as {
-            command_id: string;
-            ok: boolean;
-            result?: unknown;
-          }
+          msg as { command_id: string; ok: boolean; result?: unknown }
         );
         break;
 

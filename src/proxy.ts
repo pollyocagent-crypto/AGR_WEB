@@ -20,7 +20,7 @@ function isProtected(pathname: string): boolean {
 // that live outside app/[locale]/ in the App Router tree. If intlMiddleware
 // runs on these, it rewrites them into the [locale] subtree where they don't
 // exist and Next.js returns 404.
-const INTL_SKIP_PREFIXES = ["/auth/", "/pair"];
+const INTL_SKIP_PREFIXES = ["/auth/", "/pair", "/api/"];
 
 export default async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

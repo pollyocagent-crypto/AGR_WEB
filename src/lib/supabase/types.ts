@@ -52,8 +52,12 @@ export interface Database {
           status: CommandStatus;
           created_at: string;
           acked_at: string | null;
+          result: Json | null;
         };
-        Insert: Omit<Database["public"]["Tables"]["device_commands"]["Row"], "id" | "created_at">;
+        Insert: Omit<
+          Database["public"]["Tables"]["device_commands"]["Row"],
+          "id" | "created_at" | "acked_at" | "result"
+        > & { acked_at?: string | null; result?: Json | null };
         Update: Partial<Database["public"]["Tables"]["device_commands"]["Insert"]>;
         Relationships: [];
       };
