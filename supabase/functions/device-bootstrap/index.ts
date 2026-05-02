@@ -27,11 +27,15 @@ const PAIRING_CODE_TTL_HOURS = 1;
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Must match k_pair_alpha in screen_pairing.c and the web app filter [A-HJ-NP-Z2-9]
+const PAIR_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 chars
+
 function generatePairingCode(): string {
-  // 6 cryptographically random decimal digits
-  const buf = new Uint32Array(1);
+  const buf = new Uint8Array(6);
   crypto.getRandomValues(buf);
-  return String(buf[0] % 1_000_000).padStart(6, "0");
+  return Array.from(buf)
+    .map((b) => PAIR_ALPHA[b % 32])
+    .join("");
 }
 
 async function issueDeviceJwt(deviceId: string): Promise<string> {
