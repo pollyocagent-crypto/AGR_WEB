@@ -57,25 +57,29 @@ async function handleProxy(req: NextRequest, params: Params): Promise<NextRespon
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Collect request body as plain text (all device API endpoints use JSON).
-  let body: string | undefined;
-  let contentType: string | undefined;
+  // Collect request body as base64 (AGR-142 firmware protocol uses body_b64).
+  let bodyB64: string | null = null;
+  const forwardHeaders: Record<string, string> = {};
   if (req.method !== "GET" && req.method !== "HEAD") {
-    body = await req.text();
-    contentType = req.headers.get("content-type") ?? undefined;
+    const bodyBytes = await req.arrayBuffer();
+    if (bodyBytes.byteLength > 0) {
+      bodyB64 = Buffer.from(bodyBytes).toString("base64");
+    }
+    const ct = req.headers.get("content-type");
+    if (ct) forwardHeaders["content-type"] = ct;
   }
 
-  // Separate path from query string for firmware dispatcher.
-  const search = req.nextUrl.search.slice(1); // strip leading "?"
+  // Append query string to path; firmware reads the full path including query.
+  const search = req.nextUrl.search;
+  const fullPath = search ? `${devicePath}${search}` : devicePath;
 
-  // AGR-139 firmware protocol: action="http_request" with plain body.
+  // AGR-142 firmware protocol: payload.type="http" with base64 body.
   const payload = {
-    action: "http_request",
+    type: "http",
     method: req.method,
-    path: devicePath,
-    ...(search ? { query: search } : {}),
-    ...(body ? { body } : {}),
-    ...(contentType ? { content_type: contentType } : {}),
+    path: fullPath,
+    headers: forwardHeaders,
+    body_b64: bodyB64,
   };
 
   // Use request_command RPC (enforces ownership via security definer).
@@ -112,11 +116,11 @@ async function handleProxy(req: NextRequest, params: Params): Promise<NextRespon
       return NextResponse.json({ error: "Device returned an error" }, { status: 502 });
     }
 
-    // result shape from firmware: { status: number, content_type?: string, body: string }
-    const result = row.result as { status: number; content_type?: string; body: string };
-    const responseBody = result.body ?? "";
+    // AGR-142 result shape: { status: number, content_type: string, body_b64: string }
+    const result = row.result as { status: number; content_type?: string; body_b64?: string };
+    const bodyBuf = Buffer.from(result.body_b64 ?? "", "base64");
 
-    return new NextResponse(responseBody, {
+    return new NextResponse(bodyBuf, {
       status: result.status ?? 200,
       headers: {
         "content-type": result.content_type ?? "application/json",
