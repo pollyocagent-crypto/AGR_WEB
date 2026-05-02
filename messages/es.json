@@ -32,7 +32,9 @@
     "errorEmail": "Ingresa un correo electrónico válido.",
     "errorPasswordLength": "La contraseña debe tener al menos 8 caracteres.",
     "errorInvalidCredentials": "Correo o contraseña incorrectos.",
-    "errorAlreadyExists": "La cuenta ya existe. Intenta iniciar sesión."
+    "errorAlreadyExists": "La cuenta ya existe. Intenta iniciar sesión.",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "forgotSent": "Si ese correo está registrado, te enviaremos un enlace de recuperación."
   },
   "profile": {
     "title": "Perfil",
@@ -79,9 +81,9 @@
   },
   "addDevice": {
     "title": "Añadir dispositivo",
-    "subtitle": "Ingresa el código de 6 dígitos que aparece en tu pantalla HMI, o escanea el código QR.",
+    "subtitle": "Ingresa el código de 6 caracteres que aparece en tu pantalla HMI, o escanea el código QR.",
     "codeLabel": "Código de emparejamiento",
-    "codePlaceholder": "123456",
+    "codePlaceholder": "K7P3M2",
     "submit": "Vincular dispositivo",
     "pairing": "Vinculando…",
     "scanTab": "Escanear QR",

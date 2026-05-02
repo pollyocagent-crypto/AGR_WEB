@@ -20,6 +20,23 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+
+  async function handleForgotPassword() {
+    if (!EMAIL_RE.test(email)) {
+      setError(t("errorEmail"));
+      return;
+    }
+    setForgotLoading(true);
+    setError(null);
+    const supabase = createClient();
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset`,
+    });
+    setForgotLoading(false);
+    setForgotSent(true);
+  }
 
   function validate(): string | null {
     if (!EMAIL_RE.test(email)) return t("errorEmail");
@@ -103,7 +120,25 @@ export default function LoginPage() {
               placeholder={t("passwordPlaceholder")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
+            {mode === "login" && (
+              <div className="mt-1 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={forgotLoading}
+                  className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline disabled:opacity-50"
+                >
+                  {forgotLoading ? t("loading") : t("forgotPassword")}
+                </button>
+              </div>
+            )}
           </div>
+
+          {forgotSent && (
+            <div className="rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+              {t("forgotSent")}
+            </div>
+          )}
 
           {error && (
             <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">

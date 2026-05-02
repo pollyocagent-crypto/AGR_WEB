@@ -32,7 +32,9 @@
     "errorEmail": "Enter a valid email address.",
     "errorPasswordLength": "Password must be at least 8 characters.",
     "errorInvalidCredentials": "Invalid email or password.",
-    "errorAlreadyExists": "Account already exists. Try signing in instead."
+    "errorAlreadyExists": "Account already exists. Try signing in instead.",
+    "forgotPassword": "Forgot password?",
+    "forgotSent": "If that email is registered, a reset link is on its way."
   },
   "profile": {
     "title": "Profile",
@@ -79,9 +81,9 @@
   },
   "addDevice": {
     "title": "Add Device",
-    "subtitle": "Enter the 6-digit code shown on your HMI screen, or scan the QR code.",
+    "subtitle": "Enter the 6-character code shown on your HMI screen, or scan the QR code.",
     "codeLabel": "Pairing code",
-    "codePlaceholder": "123456",
+    "codePlaceholder": "K7P3M2",
     "submit": "Pair Device",
     "pairing": "Pairing…",
     "scanTab": "Scan QR",

@@ -33,13 +33,24 @@ export default function AddDevicePage() {
   const searchParams = useSearchParams();
 
   const [tab, setTab] = useState<Tab>("type");
-  const [code, setCode] = useState(searchParams.get("code") ?? "");
+  const [code, setCode] = useState(() => {
+    const raw = searchParams.get("code") ?? "";
+    return raw
+      .toUpperCase()
+      .replace(/[^A-HJ-NP-Z2-9]/g, "")
+      .slice(0, 6);
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
 
   const handleCodeInput = (val: string) => {
-    setCode(val.replace(/\D/g, "").slice(0, 6));
+    setCode(
+      val
+        .toUpperCase()
+        .replace(/[^A-HJ-NP-Z2-9]/g, "")
+        .slice(0, 6)
+    );
   };
 
   const pair = useCallback(
@@ -80,7 +91,10 @@ export default function AddDevicePage() {
       const first = detectedCodes[0];
       if (!first) return;
       setScannerActive(false);
-      const extracted = extractCode(first.rawValue);
+      const extracted = extractCode(first.rawValue)
+        .toUpperCase()
+        .replace(/[^A-HJ-NP-Z2-9]/g, "")
+        .slice(0, 6);
       setCode(extracted);
       if (extracted.length === 6) {
         pair(extracted);
@@ -175,8 +189,9 @@ export default function AddDevicePage() {
             <input
               id="pairing-code"
               type="text"
-              inputMode="numeric"
-              pattern="\d{6}"
+              inputMode="text"
+              pattern="[A-HJ-NP-Z2-9]{6}"
+              autoCapitalize="characters"
               maxLength={6}
               required
               autoComplete="off"
