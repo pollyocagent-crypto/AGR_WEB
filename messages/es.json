@@ -77,7 +77,13 @@
     "otaButton": "Actualizar firmware",
     "otaSending": "Enviando…",
     "otaSent": "Comando OTA enviado — el dispositivo se actualizará a v{version}.",
-    "otaError": "Error al enviar el comando OTA"
+    "otaError": "Error al enviar el comando OTA",
+    "fullInterfaceTitle": "Interfaz completa del dispositivo",
+    "fullInterfaceHint": "Abre la interfaz web integrada — canales, programas, horarios, ajustes, OTA"
+  },
+  "deviceUi": {
+    "title": "Interfaz del dispositivo",
+    "back": "Volver al dispositivo"
   },
   "addDevice": {
     "title": "Añadir dispositivo",

@@ -77,7 +77,13 @@
     "otaButton": "Update Firmware",
     "otaSending": "Sending…",
     "otaSent": "OTA command sent — device will update to v{version}.",
-    "otaError": "Failed to send OTA command"
+    "otaError": "Failed to send OTA command",
+    "fullInterfaceTitle": "Full Device Interface",
+    "fullInterfaceHint": "Open the complete built-in web UI — channels, programs, schedules, settings, OTA"
+  },
+  "deviceUi": {
+    "title": "Device Interface",
+    "back": "Back to device"
   },
   "addDevice": {
     "title": "Add Device",

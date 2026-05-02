@@ -57,48 +57,37 @@ async function handleProxy(req: NextRequest, params: Params): Promise<NextRespon
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Collect request body as base64 (safe for any content-type).
-  const bodyBytes = await req.arrayBuffer();
-  const bodyB64 = bodyBytes.byteLength > 0 ? Buffer.from(bodyBytes).toString("base64") : null;
-
-  // Forward only safe headers (skip host/connection/cookie).
-  const forwardHeaders: Record<string, string> = {};
-  const passthrough = ["content-type", "accept", "accept-language"];
-  for (const h of passthrough) {
-    const v = req.headers.get(h);
-    if (v) forwardHeaders[h] = v;
+  // Collect request body as plain text (all device API endpoints use JSON).
+  let body: string | undefined;
+  let contentType: string | undefined;
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    body = await req.text();
+    contentType = req.headers.get("content-type") ?? undefined;
   }
 
-  // Append the query string to the device path.
-  const search = req.nextUrl.search;
-  const fullPath = search ? `${devicePath}${search}` : devicePath;
+  // Separate path from query string for firmware dispatcher.
+  const search = req.nextUrl.search.slice(1); // strip leading "?"
 
+  // AGR-139 firmware protocol: action="http_request" with plain body.
   const payload = {
-    type: "http",
+    action: "http_request",
     method: req.method,
-    path: fullPath,
-    headers: forwardHeaders,
-    body_b64: bodyB64,
+    path: devicePath,
+    ...(search ? { query: search } : {}),
+    ...(body ? { body } : {}),
+    ...(contentType ? { content_type: contentType } : {}),
   };
 
-  // Insert the command — device-relay picks it up and forwards over WSS.
-  const { data: cmd, error: insertErr } = await supabase
-    .from("device_commands")
-    .insert({
-      device_id: deviceId,
-      payload,
-      requested_by: user.id,
-      status: "pending",
-    })
-    .select("id")
-    .single();
+  // Use request_command RPC (enforces ownership via security definer).
+  const { data: cmdId, error: insertErr } = await supabase.rpc("request_command", {
+    p_device_id: deviceId,
+    p_payload: payload,
+  });
 
-  if (insertErr || !cmd) {
+  if (insertErr || !cmdId) {
     console.error("[proxy] insert command error:", insertErr);
     return NextResponse.json({ error: "Failed to queue command" }, { status: 500 });
   }
-
-  const cmdId = cmd.id as string;
 
   // Poll until the device acks (status != 'pending' / 'sent') or timeout.
   const deadline = Date.now() + TIMEOUT_MS;
@@ -109,7 +98,7 @@ async function handleProxy(req: NextRequest, params: Params): Promise<NextRespon
     const { data: row, error: pollErr } = await supabase
       .from("device_commands")
       .select("status, result")
-      .eq("id", cmdId)
+      .eq("id", cmdId as string)
       .single();
 
     if (pollErr) {
@@ -123,16 +112,15 @@ async function handleProxy(req: NextRequest, params: Params): Promise<NextRespon
       return NextResponse.json({ error: "Device returned an error" }, { status: 502 });
     }
 
-    // result shape: { status: number, content_type: string, body_b64: string }
-    const result = row.result as { status: number; content_type: string; body_b64: string };
-    const bodyBuf = Buffer.from(result.body_b64 ?? "", "base64");
+    // result shape from firmware: { status: number, content_type?: string, body: string }
+    const result = row.result as { status: number; content_type?: string; body: string };
+    const responseBody = result.body ?? "";
 
-    return new NextResponse(bodyBuf, {
+    return new NextResponse(responseBody, {
       status: result.status ?? 200,
       headers: {
-        "content-type": result.content_type ?? "application/octet-stream",
+        "content-type": result.content_type ?? "application/json",
         "cache-control": "no-store",
-        // Prevent browser from interpreting device HTML as a top-level document.
         "x-content-type-options": "nosniff",
       },
     });

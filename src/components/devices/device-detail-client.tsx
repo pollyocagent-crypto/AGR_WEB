@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Download, Loader2, RotateCw, WifiOff } from "lucide-react";
+import { Download, ExternalLink, Loader2, RotateCw, WifiOff } from "lucide-react";
+import { useRouter } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Device, DeviceState, Json } from "@/lib/supabase/types";
 
@@ -71,6 +72,7 @@ interface Props {
 
 export function DeviceDetailClient({ device, initialState }: Props) {
   const t = useTranslations("deviceDetail");
+  const router = useRouter();
   const [rawState, setRawState] = useState(initialState?.state ?? null);
   const [lastSeenAt, setLastSeenAt] = useState(device.last_seen_at);
   const [pendingChannels, setPendingChannels] = useState<Set<number>>(new Set());
@@ -200,6 +202,18 @@ export function DeviceDetailClient({ device, initialState }: Props) {
           {error}
         </div>
       )}
+
+      {/* Full device interface link */}
+      <button
+        onClick={() => router.push(`/devices/${device.id}/ui`)}
+        className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-6 py-4 shadow-sm transition-colors hover:bg-secondary/50"
+      >
+        <div>
+          <p className="text-left text-sm font-semibold">{t("fullInterfaceTitle")}</p>
+          <p className="text-left text-xs text-muted-foreground">{t("fullInterfaceHint")}</p>
+        </div>
+        <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
 
       {/* Channels */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
