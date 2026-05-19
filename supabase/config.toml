@@ -100,3 +100,13 @@ enabled = false
 
 [experimental]
 orioledb_version = ""
+
+# device-relay does custom HS256 verification with AGR_JWT_SECRET — gateway JWT check conflicts.
+# device-bootstrap receives no Authorization header from firmware on first boot.
+# verify_jwt = false is locked here so `supabase functions deploy` without --no-verify-jwt
+# does not silently re-enable the gateway check and break pairing/bootstrap for new devices.
+[functions.device-relay]
+verify_jwt = false
+
+[functions.device-bootstrap]
+verify_jwt = false
