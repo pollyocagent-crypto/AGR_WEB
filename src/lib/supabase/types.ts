@@ -6,6 +6,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type CommandStatus = "pending" | "sent" | "acked" | "failed";
 export type DeviceRole = "owner" | "member";
+export type ChannelKind = "solenoid" | "motor_line";
 
 export interface Database {
   public: {
@@ -15,6 +16,7 @@ export interface Database {
           id: string;
           device_uid: string;
           firmware_version: string | null;
+          hw_model: string | null;
           last_seen_at: string | null;
           created_at: string;
         };
@@ -31,6 +33,26 @@ export interface Database {
         };
         Insert: Omit<Database["public"]["Tables"]["device_owners"]["Row"], "created_at">;
         Update: Partial<Pick<Database["public"]["Tables"]["device_owners"]["Row"], "role">>;
+        Relationships: [];
+      };
+      device_channels: {
+        Row: {
+          device_id: string;
+          kind: ChannelKind;
+          channel_index: number;
+          label: string | null;
+          module_id: string | null;
+          motor_type: string | null;
+          latching: boolean;
+          meta: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["device_channels"]["Row"],
+          "created_at" | "updated_at" | "latching" | "meta"
+        > & { latching?: boolean; meta?: Json };
+        Update: Partial<Database["public"]["Tables"]["device_channels"]["Insert"]>;
         Relationships: [];
       };
       device_state: {
@@ -115,10 +137,15 @@ export interface Database {
         Args: { p_device_id: string; p_payload: Json };
         Returns: string;
       };
+      sync_device_channels: {
+        Args: { p_device_id: string; p_channels: Json };
+        Returns: undefined;
+      };
     };
     Enums: {
       command_status: CommandStatus;
       device_role: DeviceRole;
+      channel_kind: ChannelKind;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -126,6 +153,7 @@ export interface Database {
 
 export type Device = Database["public"]["Tables"]["devices"]["Row"];
 export type DeviceOwner = Database["public"]["Tables"]["device_owners"]["Row"];
+export type DeviceChannel = Database["public"]["Tables"]["device_channels"]["Row"];
 export type DeviceState = Database["public"]["Tables"]["device_state"]["Row"];
 export type DeviceCommand = Database["public"]["Tables"]["device_commands"]["Row"];
 export type PairingCode = Database["public"]["Tables"]["pairing_codes"]["Row"];

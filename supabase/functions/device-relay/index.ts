@@ -6,6 +6,8 @@
  *   JWT must contain claim: device_id (uuid)
  *
  * Messages device → cloud:
+ *   { type: "hello",  hw_model: "gen2", firmware_version?: "2.0.0",
+ *                     channels: [ {kind, channel_index, ...}, ... ] }  (self-description; AGR-197)
  *   { type: "state",  state: {...}, ts: <epoch> }
  *   { type: "ack",    command_id: "<uuid>", ok: boolean, result?: {...} }
  *   { type: "event",  kind: "boot"|"error"|..., data?: {...}, ts?: <epoch> }
@@ -14,6 +16,17 @@
  * Messages cloud → device:
  *   { type: "command", id: "<uuid>", payload: {...} }
  *   { type: "pong" }
+ *
+ * HELLO / GEN-2 self-description (AGR-197):
+ *   The HMI aggregates the RS-485 CMD_HELLO replies from its modules and sends
+ *   one cloud-facing "hello" describing the device's full I/O map. Channel
+ *   objects:
+ *     { kind: "solenoid",   channel_index: 1..N, label?, module_id?, latching? }
+ *     { kind: "motor_line", channel_index: 1..M, motor_type: "dc"|"ac",
+ *       label?, module_id? }   // isolated dry contact — module sources no current
+ *   The relay reconciles this into device_channels via sync_device_channels()
+ *   (upsert reported + prune stale). device_channels is the authoritative I/O
+ *   map the web UI renders from.
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
@@ -49,6 +62,48 @@ async function validateDeviceJwt(token: string): Promise<DeviceJwtPayload> {
 // ---------------------------------------------------------------------------
 // Message handlers
 // ---------------------------------------------------------------------------
+
+interface HelloChannel {
+  kind: "solenoid" | "motor_line";
+  channel_index: number;
+  label?: string;
+  module_id?: string;
+  motor_type?: "dc" | "ac";
+  latching?: boolean;
+  meta?: Record<string, unknown>;
+}
+
+async function handleHello(
+  supabase: SupabaseClient,
+  deviceId: string,
+  msg: { hw_model?: unknown; firmware_version?: unknown; channels?: unknown }
+): Promise<void> {
+  // Update hardware model / firmware version reported by the device.
+  const devUpdate: Record<string, unknown> = {};
+  if (typeof msg.hw_model === "string" && msg.hw_model) devUpdate.hw_model = msg.hw_model;
+  if (typeof msg.firmware_version === "string" && msg.firmware_version) {
+    devUpdate.firmware_version = msg.firmware_version;
+  }
+  if (Object.keys(devUpdate).length > 0) {
+    const { error } = await supabase.from("devices").update(devUpdate).eq("id", deviceId);
+    if (error) console.error(`[device-relay] hello device update error ${deviceId}:`, error);
+  }
+
+  // Reconcile the self-described channel map (upsert reported + prune stale).
+  if (!Array.isArray(msg.channels)) {
+    console.error(`[device-relay] hello missing channels array from ${deviceId}`);
+    return;
+  }
+  const channels = (msg.channels as HelloChannel[]).filter(
+    (c) =>
+      c && (c.kind === "solenoid" || c.kind === "motor_line") && Number.isInteger(c.channel_index)
+  );
+  const { error } = await supabase.rpc("sync_device_channels", {
+    p_device_id: deviceId,
+    p_channels: channels,
+  });
+  if (error) console.error(`[device-relay] sync_device_channels error ${deviceId}:`, error);
+}
 
 async function handleState(
   supabase: SupabaseClient,
@@ -265,6 +320,14 @@ Deno.serve(async (req: Request) => {
     switch (msg.type) {
       case "ping":
         ws.send(JSON.stringify({ type: "pong" }));
+        break;
+
+      case "hello":
+        await handleHello(
+          supabase,
+          deviceId,
+          msg as { hw_model?: unknown; firmware_version?: unknown; channels?: unknown }
+        );
         break;
 
       case "state":

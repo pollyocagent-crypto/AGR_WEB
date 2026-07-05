@@ -2,12 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Download, ExternalLink, Loader2, RotateCw, WifiOff } from "lucide-react";
+import { Download, ExternalLink, Loader2, Plug, RotateCw, WifiOff, Zap } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { Device, DeviceState, Json } from "@/lib/supabase/types";
+import type { ChannelKind, Device, DeviceChannel, DeviceState, Json } from "@/lib/supabase/types";
 
-interface ChannelInfo {
+type ChannelMeta = Pick<
+  DeviceChannel,
+  "kind" | "channel_index" | "label" | "motor_type" | "latching"
+>;
+
+// Live per-channel value carried in device_state. Legacy GEN-1 firmware omits
+// `kind` (solenoid implied); GEN-2 tags each entry with its kind.
+interface StateChannel {
+  kind?: ChannelKind;
   index: number;
   active: boolean;
   name?: string;
@@ -20,13 +28,26 @@ interface ProgramInfo {
 }
 
 interface DeviceStateShape {
-  channels?: ChannelInfo[];
+  channels?: StateChannel[];
   programs?: ProgramInfo[];
 }
 
 function parseState(state: Json | null): DeviceStateShape {
   if (!state || typeof state !== "object" || Array.isArray(state)) return {};
   return state as unknown as DeviceStateShape;
+}
+
+// key a live value by kind+index so solenoid #1 and motor_line #1 never collide
+function stateKey(kind: ChannelKind, index: number): string {
+  return `${kind}:${index}`;
+}
+
+function buildLiveMap(shape: DeviceStateShape): Map<string, boolean> {
+  const m = new Map<string, boolean>();
+  for (const c of shape.channels ?? []) {
+    m.set(stateKey(c.kind ?? "solenoid", c.index), !!c.active);
+  }
+  return m;
 }
 
 function isOnline(lastSeenAt: string | null): boolean {
@@ -66,16 +87,18 @@ function Toggle({
 }
 
 interface Props {
-  device: Pick<Device, "id" | "device_uid" | "firmware_version" | "last_seen_at">;
+  device: Pick<Device, "id" | "device_uid" | "firmware_version" | "hw_model" | "last_seen_at">;
   initialState: Pick<DeviceState, "state" | "updated_at"> | null;
+  channels: ChannelMeta[];
 }
 
-export function DeviceDetailClient({ device, initialState }: Props) {
+export function DeviceDetailClient({ device, initialState, channels }: Props) {
   const t = useTranslations("deviceDetail");
   const router = useRouter();
   const [rawState, setRawState] = useState(initialState?.state ?? null);
   const [lastSeenAt, setLastSeenAt] = useState(device.last_seen_at);
-  const [pendingChannels, setPendingChannels] = useState<Set<number>>(new Set());
+  // pending flags keyed by `${kind}:${index}` (or legacy numeric index as `solenoid:n`)
+  const [pending, setPending] = useState<Set<string>>(new Set());
   const [rescanPending, setRescanPending] = useState(false);
   const [otaPending, setOtaPending] = useState(false);
   const [otaMessage, setOtaMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -83,15 +106,16 @@ export function DeviceDetailClient({ device, initialState }: Props) {
 
   const online = isOnline(lastSeenAt);
   const parsed = parseState(rawState);
+  const liveMap = buildLiveMap(parsed);
 
-  // Build channel map 1..8 with defaults
-  const channelMap = new Map<number, boolean>();
-  for (let i = 1; i <= 8; i++) channelMap.set(i, false);
-  if (parsed.channels) {
-    for (const ch of parsed.channels) {
-      channelMap.set(ch.index, ch.active);
-    }
-  }
+  // GEN-2+ devices self-describe their I/O via HELLO → device_channels.
+  const solenoids = channels
+    .filter((c) => c.kind === "solenoid")
+    .sort((a, b) => a.channel_index - b.channel_index);
+  const motorLines = channels
+    .filter((c) => c.kind === "motor_line")
+    .sort((a, b) => a.channel_index - b.channel_index);
+  const selfDescribed = channels.length > 0;
 
   useEffect(() => {
     const supabase = createClient();
@@ -108,15 +132,13 @@ export function DeviceDetailClient({ device, initialState }: Props) {
         (payload) => {
           const n = payload.new as { state: Json; updated_at: string };
           setRawState(n.state);
-          // Clear pending flags for channels whose state has been acked
-          const newParsed = parseState(n.state);
-          if (newParsed.channels) {
-            setPendingChannels((prev) => {
-              const next = new Set(prev);
-              for (const c of newParsed.channels!) next.delete(c.index);
-              return next;
-            });
-          }
+          // Clear pending flags for channels the device has now reported back.
+          const next = buildLiveMap(parseState(n.state));
+          setPending((prev) => {
+            const remaining = new Set(prev);
+            for (const key of next.keys()) remaining.delete(key);
+            return remaining;
+          });
         }
       )
       .on(
@@ -152,15 +174,28 @@ export function DeviceDetailClient({ device, initialState }: Props) {
     [device.id, t]
   );
 
-  const handleChannelToggle = useCallback(
-    async (channelIndex: number, newActive: boolean) => {
+  // Toggle a self-described channel (solenoid or motor line).
+  const handleToggle = useCallback(
+    async (kind: ChannelKind, index: number, newActive: boolean) => {
       if (!online) return;
-      setPendingChannels((prev) => new Set(prev).add(channelIndex));
+      const key = stateKey(kind, index);
+      setPending((prev) => new Set(prev).add(key));
       await sendCommand({
         type: "set_channel",
-        channel: channelIndex,
+        kind,
+        index,
         active: newActive,
-      } as Json);
+      } as unknown as Json);
+    },
+    [online, sendCommand]
+  );
+
+  // Legacy GEN-1 fallback path — solenoid-only, no kind on the wire.
+  const handleLegacyToggle = useCallback(
+    async (index: number, newActive: boolean) => {
+      if (!online) return;
+      setPending((prev) => new Set(prev).add(stateKey("solenoid", index)));
+      await sendCommand({ type: "set_channel", channel: index, active: newActive } as Json);
     },
     [online, sendCommand]
   );
@@ -215,47 +250,136 @@ export function DeviceDetailClient({ device, initialState }: Props) {
         <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
       </button>
 
-      {/* Channels */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("channels")}</h2>
-          <button
-            onClick={handleRescan}
-            disabled={!online || rescanPending}
-            title={t("rescanHint")}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RotateCw className={`h-4 w-4 ${rescanPending ? "animate-spin" : ""}`} />
-            {rescanPending ? t("rescanning") : t("rescan")}
-          </button>
-        </div>
-
-        {rawState === null ? (
-          <p className="text-sm text-muted-foreground">{t("noChannels")}</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {Array.from({ length: 8 }, (_, i) => i + 1).map((n) => {
-              const active = channelMap.get(n) ?? false;
-              const pending = pendingChannels.has(n);
-              const label = t("channel", { n });
-              return (
-                <div
-                  key={n}
-                  className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-3 py-2"
-                >
-                  <span className="text-sm font-medium">{label}</span>
-                  <Toggle
-                    checked={active}
-                    onChange={(val) => handleChannelToggle(n, val)}
-                    disabled={!online || pending}
-                    label={label}
-                  />
+      {selfDescribed ? (
+        <>
+          {/* Solenoid valves */}
+          {solenoids.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-primary" />
+                  <h2 className="text-lg font-semibold">{t("solenoids")}</h2>
+                  <span className="text-xs text-muted-foreground">({solenoids.length})</span>
                 </div>
-              );
-            })}
+                <button
+                  onClick={handleRescan}
+                  disabled={!online || rescanPending}
+                  title={t("rescanHint")}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RotateCw className={`h-4 w-4 ${rescanPending ? "animate-spin" : ""}`} />
+                  {rescanPending ? t("rescanning") : t("rescan")}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {solenoids.map((c) => {
+                  const key = stateKey("solenoid", c.channel_index);
+                  const active = liveMap.get(key) ?? false;
+                  const label = c.label ?? t("valve", { n: c.channel_index });
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-3 py-2"
+                    >
+                      <span className="truncate pr-2 text-sm font-medium">{label}</span>
+                      <Toggle
+                        checked={active}
+                        onChange={(val) => handleToggle("solenoid", c.channel_index, val)}
+                        disabled={!online || pending.has(key)}
+                        label={label}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Motor lines — isolated dry contacts, visually distinct from solenoids */}
+          {motorLines.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+              <div className="mb-1 flex items-center gap-2">
+                <Plug className="h-5 w-5 text-amber-500" />
+                <h2 className="text-lg font-semibold">{t("motorLines")}</h2>
+              </div>
+              <p className="mb-4 text-xs text-muted-foreground">{t("motorLinesHint")}</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {motorLines.map((c) => {
+                  const key = stateKey("motor_line", c.channel_index);
+                  const active = liveMap.get(key) ?? false;
+                  const label = c.label ?? t("line", { n: c.channel_index });
+                  const badge = c.motor_type === "ac" ? t("motorAc") : t("motorDc");
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between rounded-lg border border-l-4 border-border border-l-amber-500 bg-secondary/30 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium">{label}</span>
+                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                            {badge}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {active ? t("lineClosed") : t("lineOpen")}
+                        </span>
+                      </div>
+                      <Toggle
+                        checked={active}
+                        onChange={(val) => handleToggle("motor_line", c.channel_index, val)}
+                        disabled={!online || pending.has(key)}
+                        label={label}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        /* Legacy fallback: device has not sent HELLO — show 8 solenoid channels. */
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{t("channels")}</h2>
+            <button
+              onClick={handleRescan}
+              disabled={!online || rescanPending}
+              title={t("rescanHint")}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RotateCw className={`h-4 w-4 ${rescanPending ? "animate-spin" : ""}`} />
+              {rescanPending ? t("rescanning") : t("rescan")}
+            </button>
           </div>
-        )}
-      </div>
+          {rawState === null ? (
+            <p className="text-sm text-muted-foreground">{t("noChannels")}</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {Array.from({ length: 8 }, (_, i) => i + 1).map((n) => {
+                const key = stateKey("solenoid", n);
+                const active = liveMap.get(key) ?? false;
+                const label = t("channel", { n });
+                return (
+                  <div
+                    key={n}
+                    className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-3 py-2"
+                  >
+                    <span className="text-sm font-medium">{label}</span>
+                    <Toggle
+                      checked={active}
+                      onChange={(val) => handleLegacyToggle(n, val)}
+                      disabled={!online || pending.has(key)}
+                      label={label}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Programs (shown only when present in state) */}
       {parsed.programs && parsed.programs.length > 0 && (

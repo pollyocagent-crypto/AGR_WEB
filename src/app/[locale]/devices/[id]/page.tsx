@@ -37,13 +37,19 @@ export default async function DeviceDetailPage({ params }: Props) {
 
   if (!ownership) notFound();
 
-  const [{ data: device }, { data: stateRow }] = await Promise.all([
+  const [{ data: device }, { data: stateRow }, { data: channels }] = await Promise.all([
     supabase
       .from("devices")
-      .select("id, device_uid, firmware_version, last_seen_at")
+      .select("id, device_uid, firmware_version, hw_model, last_seen_at")
       .eq("id", id)
       .single(),
     supabase.from("device_state").select("state, updated_at").eq("device_id", id).maybeSingle(),
+    supabase
+      .from("device_channels")
+      .select("kind, channel_index, label, motor_type, latching")
+      .eq("device_id", id)
+      .order("kind", { ascending: true })
+      .order("channel_index", { ascending: true }),
   ]);
 
   if (!device) notFound();
@@ -56,7 +62,11 @@ export default async function DeviceDetailPage({ params }: Props) {
         <p className="mb-6 text-xs text-muted-foreground">fw {device.firmware_version}</p>
       )}
 
-      <DeviceDetailClient device={device} initialState={stateRow ?? null} />
+      <DeviceDetailClient
+        device={device}
+        initialState={stateRow ?? null}
+        channels={channels ?? []}
+      />
     </main>
   );
 }
