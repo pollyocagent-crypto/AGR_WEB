@@ -12,14 +12,10 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { relayHttpRequest, RelayError } from "@/lib/relay";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-
-// How long to wait for the device to respond before returning 504.
-const TIMEOUT_MS = 10_000;
-// Polling interval while waiting for the device ack.
-const POLL_INTERVAL_MS = 200;
 
 // Binary OTA routes — too large to relay over WSS; keep using direct LAN.
 const BLOCKED_PATHS = ["/api/ota"];
@@ -73,64 +69,30 @@ async function handleProxy(req: NextRequest, params: Params): Promise<NextRespon
   const search = req.nextUrl.search;
   const fullPath = search ? `${devicePath}${search}` : devicePath;
 
-  // AGR-142 firmware protocol: payload.type="http" with base64 body.
-  const payload = {
-    type: "http",
-    method: req.method,
-    path: fullPath,
-    headers: forwardHeaders,
-    body_b64: bodyB64,
-  };
+  try {
+    const relayed = await relayHttpRequest(supabase, deviceId, {
+      method: req.method,
+      path: fullPath,
+      headers: forwardHeaders,
+      bodyB64,
+    });
 
-  // Use request_command RPC (enforces ownership via security definer).
-  const { data: cmdId, error: insertErr } = await supabase.rpc("request_command", {
-    p_device_id: deviceId,
-    p_payload: payload,
-  });
-
-  if (insertErr || !cmdId) {
-    console.error("[proxy] insert command error:", insertErr);
-    return NextResponse.json({ error: "Failed to queue command" }, { status: 500 });
-  }
-
-  // Poll until the device acks (status != 'pending' / 'sent') or timeout.
-  const deadline = Date.now() + TIMEOUT_MS;
-
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-
-    const { data: row, error: pollErr } = await supabase
-      .from("device_commands")
-      .select("status, result")
-      .eq("id", cmdId as string)
-      .single();
-
-    if (pollErr) {
-      console.error("[proxy] poll error:", pollErr);
-      continue;
-    }
-
-    if (row.status === "pending" || row.status === "sent") continue;
-
-    if (row.status === "failed" || !row.result) {
-      return NextResponse.json({ error: "Device returned an error" }, { status: 502 });
-    }
-
-    // AGR-142 result shape: { status: number, content_type: string, body_b64: string }
-    const result = row.result as { status: number; content_type?: string; body_b64?: string };
-    const bodyBuf = Buffer.from(result.body_b64 ?? "", "base64");
-
-    return new NextResponse(bodyBuf, {
-      status: result.status ?? 200,
+    return new NextResponse(relayed.body, {
+      status: relayed.status,
       headers: {
-        "content-type": result.content_type ?? "application/json",
+        "content-type": relayed.contentType,
         "cache-control": "no-store",
         "x-content-type-options": "nosniff",
       },
     });
+  } catch (err) {
+    if (err instanceof RelayError) {
+      const status = err.kind === "timeout" ? 504 : err.kind === "device" ? 502 : 500;
+      return NextResponse.json({ error: err.message }, { status });
+    }
+    console.error("[proxy] unexpected relay error:", err);
+    return NextResponse.json({ error: "Proxy error" }, { status: 500 });
   }
-
-  return NextResponse.json({ error: "Device timeout" }, { status: 504 });
 }
 
 export const GET = (req: NextRequest, params: Params) => handleProxy(req, params);

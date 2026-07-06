@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Download, ExternalLink, Loader2, Plug, RotateCw, WifiOff, Zap } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRightLeft,
+  Download,
+  Droplets,
+  ExternalLink,
+  Loader2,
+  RotateCw,
+  WifiOff,
+} from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { ChannelKind, Device, DeviceChannel, DeviceState, Json } from "@/lib/supabase/types";
@@ -103,6 +112,10 @@ export function DeviceDetailClient({ device, initialState, channels }: Props) {
   const [otaPending, setOtaPending] = useState(false);
   const [otaMessage, setOtaMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Wet-touch confirm: closing (energizing) a motor-line contact is gated behind
+  // an explicit confirmation dialog — a wet capacitive screen can register phantom
+  // taps, and we never close a (possibly mains) line on a stray touch (design §6).
+  const [motorConfirm, setMotorConfirm] = useState<ChannelMeta | null>(null);
 
   const online = isOnline(lastSeenAt);
   const parsed = parseState(rawState);
@@ -190,6 +203,26 @@ export function DeviceDetailClient({ device, initialState, channels }: Props) {
     [online, sendCommand]
   );
 
+  // Motor lines: opening the contact (de-energize) is immediate; closing
+  // (energize) is routed through the wet-touch confirmation dialog first.
+  const requestMotorToggle = useCallback(
+    (c: ChannelMeta, newActive: boolean) => {
+      if (!online) return;
+      if (newActive) {
+        setMotorConfirm(c);
+      } else {
+        void handleToggle("motor_line", c.channel_index, false);
+      }
+    },
+    [online, handleToggle]
+  );
+
+  const confirmMotorClose = useCallback(() => {
+    if (!motorConfirm) return;
+    void handleToggle("motor_line", motorConfirm.channel_index, true);
+    setMotorConfirm(null);
+  }, [motorConfirm, handleToggle]);
+
   // Legacy GEN-1 fallback path — solenoid-only, no kind on the wire.
   const handleLegacyToggle = useCallback(
     async (index: number, newActive: boolean) => {
@@ -257,7 +290,7 @@ export function DeviceDetailClient({ device, initialState, channels }: Props) {
             <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-primary" />
+                  <Droplets className="h-5 w-5 text-primary" />
                   <h2 className="text-lg font-semibold">{t("solenoids")}</h2>
                   <span className="text-xs text-muted-foreground">({solenoids.length})</span>
                 </div>
@@ -295,11 +328,13 @@ export function DeviceDetailClient({ device, initialState, channels }: Props) {
             </div>
           )}
 
-          {/* Motor lines — isolated dry contacts, visually distinct from solenoids */}
+          {/* Motor lines — isolated dry contacts. Distinct visual language per
+              the locked GEN-2 design: ⇄ commutation glyph, DC/AC badge, double
+              amber border, contact verbs (open/closed) with a filled state dot. */}
           {motorLines.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <div className="mb-1 flex items-center gap-2">
-                <Plug className="h-5 w-5 text-amber-500" />
+                <ArrowRightLeft className="h-5 w-5 text-amber-500" />
                 <h2 className="text-lg font-semibold">{t("motorLines")}</h2>
               </div>
               <p className="mb-4 text-xs text-muted-foreground">{t("motorLinesHint")}</p>
@@ -308,28 +343,47 @@ export function DeviceDetailClient({ device, initialState, channels }: Props) {
                   const key = stateKey("motor_line", c.channel_index);
                   const active = liveMap.get(key) ?? false;
                   const label = c.label ?? t("line", { n: c.channel_index });
-                  const badge = c.motor_type === "ac" ? t("motorAc") : t("motorDc");
+                  const isAc = c.motor_type === "ac";
+                  const badge = isAc ? t("motorAc") : t("motorDc");
+                  // State is shape + text + dot, never colour alone (outdoor legibility).
+                  const verb = active ? t("contactClosed") : t("contactOpen");
                   return (
                     <div
                       key={key}
-                      className="flex items-center justify-between rounded-lg border border-l-4 border-border border-l-amber-500 bg-secondary/30 px-4 py-3"
+                      className="flex items-center justify-between rounded-lg border-2 border-amber-500/60 bg-secondary/30 px-4 py-3"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="truncate text-sm font-medium">{label}</span>
-                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                            <ArrowRightLeft className="h-3 w-3" />
                             {badge}
                           </span>
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          {active ? t("lineClosed") : t("lineOpen")}
+                        <span className="mt-0.5 flex items-center gap-1.5 text-xs">
+                          <span
+                            aria-hidden
+                            className={`inline-block h-2 w-2 rounded-full ${
+                              active ? "bg-amber-500" : "border border-muted-foreground/50"
+                            }`}
+                          />
+                          <span
+                            className={
+                              active
+                                ? "font-medium text-amber-600 dark:text-amber-400"
+                                : "text-muted-foreground"
+                            }
+                          >
+                            {verb}
+                          </span>
+                          <span className="text-muted-foreground">· IN─┤⌁├─OUT</span>
                         </span>
                       </div>
                       <Toggle
                         checked={active}
-                        onChange={(val) => handleToggle("motor_line", c.channel_index, val)}
+                        onChange={(val) => requestMotorToggle(c, val)}
                         disabled={!online || pending.has(key)}
-                        label={label}
+                        label={`${label} — ${verb}`}
                       />
                     </div>
                   );
@@ -441,6 +495,54 @@ export function DeviceDetailClient({ device, initialState, channels }: Props) {
           </p>
         )}
       </div>
+
+      {/* Wet-touch confirmation — required before CLOSING (energizing) a motor
+          line. Opening the contact is immediate; closing a possibly-mains line
+          must never happen on a stray touch (design §6). */}
+      {motorConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setMotorConfirm(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <h3 className="text-lg font-semibold">{t("wetConfirmTitle")}</h3>
+            </div>
+            <p className="mb-2 text-sm text-muted-foreground">
+              {t("wetConfirmBody", {
+                type: motorConfirm.motor_type === "ac" ? t("motorAc") : t("motorDc"),
+              })}
+            </p>
+            {motorConfirm.motor_type === "ac" && (
+              <p className="mb-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {t("wetConfirmAcWarn")}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setMotorConfirm(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary"
+              >
+                {t("wetConfirmCancel")}
+              </button>
+              <button
+                onClick={confirmMotorClose}
+                className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+                {t("wetConfirmClose")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
