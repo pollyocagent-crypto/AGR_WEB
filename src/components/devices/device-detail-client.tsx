@@ -346,7 +346,10 @@ export function DeviceDetailClient({ device, initialState, channels }: Props) {
                   const isAc = c.motor_type === "ac";
                   const badge = isAc ? t("motorAc") : t("motorDc");
                   // State is shape + text + dot, never colour alone (outdoor legibility).
+                  // Full caption spells out the energize semantics so "Closed" is
+                  // never misread as "off"; the short verb backs the aria-label.
                   const verb = active ? t("contactClosed") : t("contactOpen");
+                  const caption = active ? t("lineClosed") : t("lineOpen");
                   return (
                     <div
                       key={key}
@@ -374,9 +377,11 @@ export function DeviceDetailClient({ device, initialState, channels }: Props) {
                                 : "text-muted-foreground"
                             }
                           >
-                            {verb}
+                            {caption}
                           </span>
-                          <span className="text-muted-foreground">· IN─┤⌁├─OUT</span>
+                        </span>
+                        <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
+                          IN─┤⌁├─OUT
                         </span>
                       </div>
                       <Toggle
