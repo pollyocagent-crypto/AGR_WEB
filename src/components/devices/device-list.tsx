@@ -22,8 +22,7 @@ function isOnline(lastSeenAt: string | null): boolean {
 function getActiveChannelCount(state: Json | null): number {
   if (!state || typeof state !== "object" || Array.isArray(state)) return 0;
   const channels = (state as Record<string, unknown>).channels as
-    | Array<{ active?: boolean }>
-    | undefined;
+    Array<{ active?: boolean }> | undefined;
   if (!Array.isArray(channels)) return 0;
   return channels.filter((c) => c.active).length;
 }
