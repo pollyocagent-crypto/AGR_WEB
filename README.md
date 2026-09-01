@@ -78,6 +78,11 @@ paused project stops resolving in DNS, which takes down auth, Realtime, the
 `device-relay` WSS endpoint and every `/api/devices/*` route — the Vercel site
 still serves HTML, so the outage is silent (AGR-273).
 
+Two independent cron legs ping the project, on two different providers, so that
+neither provider going quiet can take the protection down (AGR-284).
+
+### Leg 1 — GitHub Actions, every 3 days
+
 `.github/workflows/supabase-keepalive.yml` pings PostgREST every 3 days. When the
 ping fails it opens a GitHub issue labelled `supabase-outage` (and comments on the
 existing one instead of opening duplicates), then fails the run — so the outage
@@ -90,6 +95,42 @@ secrets:
 | `SUPABASE_KEEPALIVE_URL`      | `NEXT_PUBLIC_SUPABASE_URL`      |
 | `SUPABASE_KEEPALIVE_ANON_KEY` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
 
+### Leg 2 — Vercel cron, daily
+
+GitHub disables scheduled workflows in a public repository after 60 days without
+repository activity, and the docs do not define what counts as activity — so leg 1
+switches itself off exactly when the project goes quiet, which is also when nobody
+is watching. (The popular workaround of committing a timestamp on a schedule is
+not an option: `gautamkrishnar/keepalive-workflow`, which does that, was disabled
+by GitHub for a terms-of-service violation.)
+
+So `vercel.json` runs a second daily cron, `GET /api/cron/keepalive`
+(`src/app/api/cron/keepalive/route.ts`), which performs the same anon PostgREST
+read from a Vercel Function. Vercel documents no inactivity rule for cron jobs —
+"New deployments do not affect existing cron jobs" — and Hobby allows 100 crons at
+a minimum interval of once per day, so a daily ping is inside the free tier and
+inside the ~7 day pause window. The route needs no new secrets beyond the ones the
+app already has; production additionally sets:
+
+| Variable                | Purpose                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `CRON_SECRET`           | Vercel sends it as `Authorization: Bearer …`; the route rejects anything else. |
+| `KEEPALIVE_ALERT_EMAIL` | Recipient of the outage email. Unset ⇒ no email is sent.                       |
+
+Alerting on this leg goes out over Resend, which does not touch GitHub. It is
+inert until `RESEND_API_KEY` / `RESEND_FROM_EMAIL` / `KEEPALIVE_ALERT_EMAIL` are
+all set — until then a failed run still records the reason in its own JSON
+response and in the Vercel function logs, and leg 1's GitHub issue remains the
+only push notification. Verify a leg-2 run with:
+
+```bash
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  https://agr-hmi-cloud.vercel.app/api/cron/keepalive
+# {"ok":true,"attempts":1,"checkedAt":"…"}
+```
+
+### Restoring a paused project
+
 A project that is already paused can be restored without dashboard access via the
 Management API (`POST /v1/projects/{ref}/restore` with a personal access token;
 the request needs an explicit `User-Agent` header or Cloudflare answers 403).
@@ -101,10 +142,10 @@ plan with this keep-alive, with one standing gate: **revisit Supabase Pro before
 devices are handed to real users** — the free plan has no SLA against pausing and
 no backups older than 7 days.
 
-> **Caveat — the cron can silently switch itself off.** GitHub disables scheduled
-> workflows in a public repository after 60 days without repository activity, and
-> the workflow's own runs do not count as activity. If nobody pushes to this repo
-> for 60 days the keep-alive stops, Supabase pauses, and the outage is silent
-> again. While the repo is under active development this cannot trigger; if
-> development goes quiet, re-enable the workflow from the Actions tab or run it
-> via `workflow_dispatch`. Tracked on AGR-280.
+> **Residual gap — detection, not prevention.** Two legs on two providers keep the
+> project awake, but both alarms live on infrastructure we own: if Vercel itself
+> is the thing that breaks, or Resend is unconfigured while the Actions cron is
+> disabled, an outage can still go unannounced. Closing that needs a third-party
+> uptime monitor pointed at `/api/cron/keepalive`, which needs a board decision on
+> an external account. Tracked on AGR-284, to be taken together with the standing
+> "revisit Supabase Pro before devices reach real users" gate.
