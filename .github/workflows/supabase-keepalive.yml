@@ -3,7 +3,8 @@ name: Supabase Keep-Alive
 # Supabase free tier pauses a project after ~7 days without API activity, which
 # takes down auth, Realtime and the device-relay WSS endpoint (see AGR-273).
 # This job touches the REST API on a schedule so the project stays ACTIVE_HEALTHY,
-# and fails loudly (e-mail to the repo owner) as soon as the project is unreachable.
+# and on failure raises a GitHub issue labelled `supabase-outage` (notification +
+# ticket) that it closes again on the next healthy run.
 
 on:
   schedule:
@@ -19,21 +20,27 @@ jobs:
   ping:
     name: Ping Supabase REST
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Ping devices table via PostgREST
+        id: ping
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_KEEPALIVE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_KEEPALIVE_ANON_KEY }}
         run: |
           set -u
           if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
-            echo "::error::Missing repo secrets SUPABASE_KEEPALIVE_URL / SUPABASE_KEEPALIVE_ANON_KEY."
+            echo "Missing repo secrets SUPABASE_KEEPALIVE_URL / SUPABASE_KEEPALIVE_ANON_KEY." > /tmp/reason.txt
+            echo "::error::$(cat /tmp/reason.txt)"
             exit 1
           fi
 
           host="$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://##; s#/.*##')"
           if ! getent hosts "$host" > /dev/null; then
-            echo "::error::$host does not resolve — the Supabase project is almost certainly PAUSED (INACTIVE). Restore it with POST /v1/projects/{ref}/restore on the Management API (PAT + explicit User-Agent header), then re-run this job. See README 'Keeping the Supabase project awake'."
+            echo "\`$host\` does not resolve — the Supabase project is almost certainly PAUSED (INACTIVE). Restore it with \`POST /v1/projects/{ref}/restore\` on the Management API (PAT + explicit User-Agent header), then re-run this job. See README 'Keeping the Supabase project awake'." > /tmp/reason.txt
+            echo "::error::$(cat /tmp/reason.txt)"
             exit 1
           fi
 
@@ -51,6 +58,57 @@ jobs:
             sleep 10
           done
 
-          echo "::error::Supabase REST returned HTTP ${code} — project may be paused or degraded."
-          head -c 400 /tmp/keepalive.out
+          {
+            echo "PostgREST answered HTTP \`${code}\` on 3 attempts — the project may be paused, degraded or the anon key was rotated."
+            echo
+            echo "Response body (truncated):"
+            echo '```'
+            head -c 400 /tmp/keepalive.out
+            echo
+            echo '```'
+          } > /tmp/reason.txt
+          echo "::error::PostgREST answered HTTP ${code} — project may be paused or degraded."
           exit 1
+
+      - name: Raise outage ticket
+        if: steps.ping.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create supabase-outage --color B60205 \
+            --description "Supabase backend unreachable (raised by keep-alive)" 2>/dev/null || true
+
+          body="$(cat /tmp/reason.txt)
+
+          Raised automatically by the Supabase Keep-Alive workflow: ${RUN_URL}
+          The AGR-117 cloud backend (auth, Realtime, device-relay WSS, OTA) is down while
+          Vercel keeps serving the static shell, so nothing else will report this.
+          This issue is closed automatically by the next healthy run."
+
+          existing="$(gh issue list --label supabase-outage --state open --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+            echo "commented on existing outage ticket #${existing}"
+          else
+            gh issue create --title "Supabase backend unreachable — AGR-117 cloud is down" \
+              --label supabase-outage --body "$body"
+          fi
+
+      - name: Resolve outage ticket
+        if: steps.ping.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          for n in $(gh issue list --label supabase-outage --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Keep-alive is green again — PostgREST answered 2xx. ${RUN_URL}"
+          done
+
+      - name: Fail the run when the ping failed
+        if: always() && steps.ping.outcome == 'failure'
+        run: exit 1

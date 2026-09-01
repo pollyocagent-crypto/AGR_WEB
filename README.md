@@ -78,9 +78,12 @@ paused project stops resolving in DNS, which takes down auth, Realtime, the
 `device-relay` WSS endpoint and every `/api/devices/*` route — the Vercel site
 still serves HTML, so the outage is silent (AGR-273).
 
-`.github/workflows/supabase-keepalive.yml` pings PostgREST every 3 days and fails
-the run (e-mailing the repo owner) when the project is unreachable. It needs two
-repository secrets:
+`.github/workflows/supabase-keepalive.yml` pings PostgREST every 3 days. When the
+ping fails it opens a GitHub issue labelled `supabase-outage` (and comments on the
+existing one instead of opening duplicates), then fails the run — so the outage
+arrives as both a notification and a ticket, which is the only signal there will
+be. The next healthy run closes the issue again. The job needs two repository
+secrets:
 
 | Secret                        | Value                           |
 | ----------------------------- | ------------------------------- |
@@ -92,6 +95,11 @@ Management API (`POST /v1/projects/{ref}/restore` with a personal access token;
 the request needs an explicit `User-Agent` header or Cloudflare answers 403).
 Restore takes a couple of minutes, after which re-run the workflow to confirm
 (AGR-276).
+
+The board reviewed the tier on 2026-09-01 (AGR-273) and chose to stay on the free
+plan with this keep-alive, with one standing gate: **revisit Supabase Pro before
+devices are handed to real users** — the free plan has no SLA against pausing and
+no backups older than 7 days.
 
 > **Caveat — the cron can silently switch itself off.** GitHub disables scheduled
 > workflows in a public repository after 60 days without repository activity, and
