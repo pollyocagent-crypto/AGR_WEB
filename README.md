@@ -112,21 +112,40 @@ a minimum interval of once per day, so a daily ping is inside the free tier and
 inside the ~7 day pause window. The route needs no new secrets beyond the ones the
 app already has; production additionally sets:
 
-| Variable                | Purpose                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `CRON_SECRET`           | Vercel sends it as `Authorization: Bearer …`; the route rejects anything else. |
-| `KEEPALIVE_ALERT_EMAIL` | Recipient of the outage email. Unset ⇒ no email is sent.                       |
+| Variable      | Purpose                                                                        |
+| ------------- | ------------------------------------------------------------------------------ |
+| `CRON_SECRET` | Vercel sends it as `Authorization: Bearer …`; the route rejects anything else. |
 
-Alerting on this leg goes out over Resend, which does not touch GitHub. It is
-inert until `RESEND_API_KEY` / `RESEND_FROM_EMAIL` / `KEEPALIVE_ALERT_EMAIL` are
-all set — until then a failed run still records the reason in its own JSON
-response and in the Vercel function logs, and leg 1's GitHub issue remains the
-only push notification. Verify a leg-2 run with:
+#### Alarm channels on leg 2
+
+Pinging is only half the job: a leg that wakes the project but cannot say so when
+waking fails is a silent failure (AGR-286). The route therefore has two
+independent, individually optional alarm channels, and reports which ones are
+live as `armed` in **every** response, healthy runs included — so a missing
+credential is visible without waiting for an outage.
+
+| Channel  | Variables                                                      | Behaviour                                                                                             |
+| -------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `github` | `KEEPALIVE_GITHUB_TOKEN`, `KEEPALIVE_GITHUB_REPO`              | Opens/comments on the same `supabase-outage` issue leg 1 uses, and closes it on the next healthy run. |
+| `email`  | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `KEEPALIVE_ALERT_EMAIL` | Sends the outage mail over Resend. Touches neither GitHub nor Supabase.                               |
+
+The `github` channel needs a **fine-grained PAT scoped to this repository with
+Issues: read and write** — nothing else. This keeps the two legs decoupled
+despite sharing a ticket: GitHub disables the scheduled _workflow_ after 60 days
+of repository silence, it does not disable the REST API, so leg 2 can still speak
+after leg 1 has switched itself off.
+
+A channel with missing variables is skipped, never fatal — an alarm failure must
+not take the ping down with it. With no channel armed the run still records the
+reason in its own JSON response and in the Vercel function logs, which is the
+"silent but recorded" state to stay out of in production. Verify a leg-2 run
+with:
 
 ```bash
 curl -s -H "Authorization: Bearer $CRON_SECRET" \
   https://agr-hmi-cloud.vercel.app/api/cron/keepalive
-# {"ok":true,"attempts":1,"checkedAt":"…"}
+# {"ok":true,"attempts":1,"checkedAt":"…","armed":["github"]}
+# armed:[] ⇒ the ping is green but an outage would go unannounced.
 ```
 
 ### Restoring a paused project
@@ -144,8 +163,8 @@ no backups older than 7 days.
 
 > **Residual gap — detection, not prevention.** Two legs on two providers keep the
 > project awake, but both alarms live on infrastructure we own: if Vercel itself
-> is the thing that breaks, or Resend is unconfigured while the Actions cron is
-> disabled, an outage can still go unannounced. Closing that needs a third-party
+> is the thing that breaks, or every leg-2 channel is unarmed while the Actions
+> cron is disabled, an outage can still go unannounced. Closing that needs a third-party
 > uptime monitor pointed at `/api/cron/keepalive`, which needs a board decision on
 > an external account. Tracked on AGR-284, to be taken together with the standing
 > "revisit Supabase Pro before devices reach real users" gate.
