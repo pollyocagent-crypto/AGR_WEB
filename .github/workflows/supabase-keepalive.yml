@@ -74,6 +74,7 @@ jobs:
         if: steps.ping.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -100,6 +101,7 @@ jobs:
         if: steps.ping.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -108,5 +110,5 @@ jobs:
           done
 
       - name: Fail the run when the ping failed
-        if: steps.ping.outcome == 'failure'
+        if: always() && steps.ping.outcome == 'failure'
         run: exit 1
