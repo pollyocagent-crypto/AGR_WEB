@@ -33,7 +33,7 @@ jobs:
 
           host="$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://##; s#/.*##')"
           if ! getent hosts "$host" > /dev/null; then
-            echo "::error::$host does not resolve — the Supabase project is almost certainly PAUSED (INACTIVE). Restore it in the dashboard, then re-run this job."
+            echo "::error::$host does not resolve — the Supabase project is almost certainly PAUSED (INACTIVE). Restore it with POST /v1/projects/{ref}/restore on the Management API (PAT + explicit User-Agent header), then re-run this job. See README 'Keeping the Supabase project awake'."
             exit 1
           fi
 

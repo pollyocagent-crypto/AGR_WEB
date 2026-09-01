@@ -87,6 +87,16 @@ repository secrets:
 | `SUPABASE_KEEPALIVE_URL`      | `NEXT_PUBLIC_SUPABASE_URL`      |
 | `SUPABASE_KEEPALIVE_ANON_KEY` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
 
-A project that is already paused cannot be resumed from the CLI or the
-Management API token stored here — restore it from the Supabase dashboard, then
-re-run the workflow to confirm.
+A project that is already paused can be restored without dashboard access via the
+Management API (`POST /v1/projects/{ref}/restore` with a personal access token;
+the request needs an explicit `User-Agent` header or Cloudflare answers 403).
+Restore takes a couple of minutes, after which re-run the workflow to confirm
+(AGR-276).
+
+> **Caveat — the cron can silently switch itself off.** GitHub disables scheduled
+> workflows in a public repository after 60 days without repository activity, and
+> the workflow's own runs do not count as activity. If nobody pushes to this repo
+> for 60 days the keep-alive stops, Supabase pauses, and the outage is silent
+> again. While the repo is under active development this cannot trigger; if
+> development goes quiet, re-enable the workflow from the Actions tab or run it
+> via `workflow_dispatch`. Tracked on AGR-280.
