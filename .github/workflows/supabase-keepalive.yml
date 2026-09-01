@@ -1,0 +1,56 @@
+name: Supabase Keep-Alive
+
+# Supabase free tier pauses a project after ~7 days without API activity, which
+# takes down auth, Realtime and the device-relay WSS endpoint (see AGR-273).
+# This job touches the REST API on a schedule so the project stays ACTIVE_HEALTHY,
+# and fails loudly (e-mail to the repo owner) as soon as the project is unreachable.
+
+on:
+  schedule:
+    # Every 3 days at 06:17 UTC — well inside the ~7 day inactivity window.
+    - cron: "17 6 */3 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping Supabase REST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping devices table via PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_KEEPALIVE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_KEEPALIVE_ANON_KEY }}
+        run: |
+          set -u
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::Missing repo secrets SUPABASE_KEEPALIVE_URL / SUPABASE_KEEPALIVE_ANON_KEY."
+            exit 1
+          fi
+
+          host="$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://##; s#/.*##')"
+          if ! getent hosts "$host" > /dev/null; then
+            echo "::error::$host does not resolve — the Supabase project is almost certainly PAUSED (INACTIVE). Restore it in the dashboard, then re-run this job."
+            exit 1
+          fi
+
+          # A real table read goes through PostgREST to Postgres, so it counts as
+          # project activity. RLS denies anon, an empty result is the success case.
+          for attempt in 1 2 3; do
+            code="$(curl -s -o /tmp/keepalive.out -w '%{http_code}' --max-time 20 \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              "${SUPABASE_URL}/rest/v1/devices?select=id&limit=1")"
+            echo "attempt ${attempt}: HTTP ${code}"
+            case "$code" in
+              2*) echo "Supabase project is awake."; exit 0 ;;
+            esac
+            sleep 10
+          done
+
+          echo "::error::Supabase REST returned HTTP ${code} — project may be paused or degraded."
+          head -c 400 /tmp/keepalive.out
+          exit 1

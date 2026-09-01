@@ -70,3 +70,23 @@ supabase db push
 supabase start
 npm run dev
 ```
+
+## Keeping the Supabase project awake
+
+On the free tier Supabase pauses a project after ~7 days without API activity. A
+paused project stops resolving in DNS, which takes down auth, Realtime, the
+`device-relay` WSS endpoint and every `/api/devices/*` route — the Vercel site
+still serves HTML, so the outage is silent (AGR-273).
+
+`.github/workflows/supabase-keepalive.yml` pings PostgREST every 3 days and fails
+the run (e-mailing the repo owner) when the project is unreachable. It needs two
+repository secrets:
+
+| Secret                        | Value                           |
+| ----------------------------- | ------------------------------- |
+| `SUPABASE_KEEPALIVE_URL`      | `NEXT_PUBLIC_SUPABASE_URL`      |
+| `SUPABASE_KEEPALIVE_ANON_KEY` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+
+A project that is already paused cannot be resumed from the CLI or the
+Management API token stored here — restore it from the Supabase dashboard, then
+re-run the workflow to confirm.
